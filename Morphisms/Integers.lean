@@ -7,16 +7,19 @@ import Mathlib.Topology.UniformSpace.Cauchy
 
 import Mathlib
 
-class IsInteger (Z : Type) extends CommRing Z, LinearOrder Z, IsStrictOrderedRing Z where
+class IsInteger (Z : Type*) extends CommRing Z, LinearOrder Z, IsStrictOrderedRing Z where
   ofNat : ℕ → Z
+  intEquiv : Z ≃+*o ℤ
   nonneg_well_ordered : IsWellOrder {z : Z | z ≥ 0} (· < ·)
 
-instance IsIntOfNat (Z : Type) [is_int : IsInteger Z] (n : ℕ) : OfNat Z n := ⟨is_int.ofNat n⟩
+instance IsIntOfNat (Z : Type*) [is_int : IsInteger Z] (n : ℕ) : OfNat Z n := ⟨is_int.ofNat n⟩
 
 class IsReal (R : Type) extends Field R, ConditionallyCompleteLinearOrder R, IsStrictOrderedRing R
 
 
 instance : IsInteger Int where
+  ofNat := Int.ofNat
+  intEquiv := by exact OrderRingIso.refl ℤ
   nonneg_well_ordered := by
     refine {
       toIsTrichotomous := instIsTrichotomousLt,
@@ -232,6 +235,49 @@ lemma gt_def {a b : ℕ} (h : a < b) : ∃ k : ℕ, a + k = b ∧ k > 0 := by
     exact Nat.le_of_succ_le h
   . exact Nat.zero_lt_sub_of_lt h
 
+def abs_nat_pair (x : NatPair) : ℕ :=
+  if x.p ≥ x.q then
+    x.p - x.q
+  else
+    x.q - x.p
+
+def int_nat_pair (x : NatPair) : ℤ := Int.ofNat x.p - Int.ofNat x.q
+
+def quotient_int_natAbs (x : QuotientInt) : ℕ := by
+  refine x.lift abs_nat_pair ?_
+  intro ⟨a, b⟩ ⟨c, d⟩ hab
+  change a + d = b + c at hab
+  simp[abs_nat_pair]
+  have h_ineq : b ≤ a ↔ d ≤ c := by
+    constructor
+    . intro hmp
+      rw[←Nat.add_le_add_iff_left (n := a), hab, Nat.add_le_add_iff_right]
+      exact hmp
+    . intro hmpr
+      rw[←Nat.add_le_add_iff_right (n := c), ←hab, Nat.add_le_add_iff_left]
+      exact hmpr
+
+  refine ite_congr ?_ ?_ ?_
+  . simp; exact h_ineq
+  . intro h
+    have : b ≤ a := by exact h_ineq.mpr h
+    rw[←Nat.add_right_cancel_iff (n := b + d)]
+    ac_change a - b + b + d = c - d + d + b
+    simp[Nat.sub_add_cancel, this, h]
+    convert hab using 1
+    ac_rfl
+  . intro h
+    simp at h
+    have h' : c ≤ d := by exact Nat.le_of_succ_le h
+    have h2' : a ≤ b := by exact Nat.le_of_succ_le ((lt_iff_lt_of_le_iff_le (id (Iff.symm h_ineq))).mp h)
+
+    rw[←Nat.add_right_cancel_iff (n := a + c)]
+    ac_change b - a + a + c = d - c + c + a
+    simp[Nat.sub_add_cancel, h', h2']
+    convert hab.symm using 1
+    ac_rfl
+
+
 theorem quotient_int_mul_lt_of_pos_right (x y z : QuotientInt) :
   lt_quotient_int x y → lt_quotient_int 0 z → lt_quotient_int (mul_quotient_int x z) (mul_quotient_int y z) := by
         change _ → lt_quotient_int ⟦⟨0, 0⟩⟧ z → _
@@ -249,43 +295,92 @@ theorem quotient_int_mul_lt_of_pos_right (x y z : QuotientInt) :
         simp[←right_distrib]
         exact Nat.mul_lt_mul_of_pos_right hxy hk_pos
 
-
-
-instance decide_nonneg (x : QuotientInt) : Decidable (le_quotient_int ⟦⟨0, 0⟩⟧  x) :=
-  Quotient.recOnSubsingleton x fun pair =>
-    if h : pair.q ≤ pair.p then
-      isTrue (by
-        simp[le_quotient_int, le_nat_pair]
-        exact h
-      )
-    else
-      isFalse (by
-        simp[le_quotient_int, le_nat_pair]
-        simp at h
-        exact h
-      )
-
-
-instance : Coe ℤ QuotientInt where
-  coe := fun
+@[simp]
+def coeZQuotientInt : ℤ → QuotientInt
     | Int.ofNat n => ⟦⟨n, 0⟩⟧
     | Int.negSucc n => ⟦⟨0, n + 1⟩⟧
 
+instance : Coe ℤ QuotientInt where
+  coe := coeZQuotientInt
 
-instance : IsInteger QuotientInt where
-  ofNat := quotient_int_ofNat
-  zero := ⟦⟨0, 0⟩⟧
-  one := ⟦⟨1, 0⟩⟧
 
-  exists_pair_ne := by
-    use mkQuotientInt ⟨0, 0⟩
-    use mkQuotientInt ⟨1, 0⟩
-    simp[mkQuotientInt]
-    intro h
-    have := by exact Quotient.eq_iff_equiv.mp h
-    change 0 + 0 = 1 + 0 at this
+instance : LinearOrder QuotientInt where
+  le := le_quotient_int
+  lt := lt_quotient_int
+
+  toDecidableLE := fun x y : QuotientInt ↦
+    Quotient.recOnSubsingleton₂ x y fun a b ↦
+      if h : a.p + b.q ≤ b.p + a.q then
+        isTrue (by
+          change le_quotient_int ⟦a⟧ ⟦b⟧
+          simp[le_quotient_int, le_nat_pair]
+          exact h
+        )
+      else
+        isFalse (by
+          change ¬le_quotient_int ⟦a⟧ ⟦b⟧
+          simp[le_quotient_int, le_nat_pair]
+          simp at h
+          exact h
+        )
+
+  le_refl := by
+    intro x
+    simp[le_quotient_int]
+    refine Quotient.inductionOn x ?_
+    intro ⟨a, b⟩
+    simp[le_nat_pair]
+
+  le_trans := by
+    intro x y z
+    refine Quotient.inductionOn₃ x y z ?_
+    intro ⟨a, b⟩ ⟨c, d⟩ ⟨e, f⟩
+    simp[le_quotient_int, le_nat_pair]
+    intro hxy hyz
     linarith
 
+  le_antisymm := by
+    intro x y
+    refine Quotient.inductionOn₂ x y ?_
+    intro ⟨a, b⟩ ⟨c, d⟩
+    simp[le_quotient_int, le_nat_pair]
+    intro ha hb
+    apply Quotient.eq_iff_equiv.mpr
+    change a + d = b + c
+    linarith
+
+  le_total := by
+    intro x y
+    refine Quotient.inductionOn₂ x y ?_
+    intro ⟨a, b⟩ ⟨c, d⟩
+    simp[le_quotient_int, le_nat_pair]
+    exact Nat.le_total (a + d) (c + b)
+
+  lt_iff_le_not_ge := by
+    intro x y
+    refine Quotient.inductionOn₂ x y ?_
+    intro ⟨a, b⟩ ⟨c, d⟩
+    simp[lt_quotient_int, le_quotient_int, lt_nat_pair, le_nat_pair]
+    intro h
+    exact Nat.le_of_succ_le h
+
+
+lemma quotient_int_of_natAbs (x : QuotientInt) (h : 0 ≤ x) :
+    quotient_int_ofNat (quotient_int_natAbs x) = x := by
+      revert h
+      refine Quotient.inductionOn x ?_
+      intro ⟨a, b⟩ hx
+      change le_quotient_int ⟦⟨0, 0⟩⟧ ⟦⟨a, b⟩⟧ at hx
+      simp[le_quotient_int, le_nat_pair] at hx
+
+      apply Quotient.eq_iff_equiv.mpr
+      simp [abs_nat_pair, quotient_int_natAbs, hx]
+      change a - b + b = 0 + a
+      simp[Nat.sub_add_cancel, hx]
+
+instance : CommRing QuotientInt where
+  zero := ⟦⟨0, 0⟩⟧
+  one := ⟦⟨1, 0⟩⟧
 
   nsmul := fun n x ↦ mul_quotient_int (quotient_int_ofNat n) x
   nsmul_zero := by
@@ -392,57 +487,15 @@ instance : IsInteger QuotientInt where
     change b + a + 0 = a + b + 0
     ring
 
-
-  le := le_quotient_int
-  lt := lt_quotient_int
-
-  toDecidableLE := fun x y : QuotientInt ↦
-    Quotient.recOnSubsingleton₂ x y fun a b ↦
-      if h : a.p + b.q ≤ b.p + a.q then
-        isTrue (by
-          change le_quotient_int ⟦a⟧ ⟦b⟧
-          simp[le_quotient_int, le_nat_pair]
-          exact h
-        )
-      else
-        isFalse (by
-          change ¬le_quotient_int ⟦a⟧ ⟦b⟧
-          simp[le_quotient_int, le_nat_pair]
-          simp at h
-          exact h
-        )
-
-  le_refl := by
-    intro x
-    simp[le_quotient_int]
-    refine Quotient.inductionOn x ?_
-    intro ⟨a, b⟩
-    simp[le_nat_pair]
-
-  le_trans := by
-    intro x y z
-    refine Quotient.inductionOn₃ x y z ?_
-    intro ⟨a, b⟩ ⟨c, d⟩ ⟨e, f⟩
-    simp[le_quotient_int, le_nat_pair]
-    intro hxy hyz
+instance : IsStrictOrderedRing QuotientInt where
+  exists_pair_ne := by
+    use mkQuotientInt ⟨0, 0⟩
+    use mkQuotientInt ⟨1, 0⟩
+    simp[mkQuotientInt]
+    intro h
+    have := by exact Quotient.eq_iff_equiv.mp h
+    change 0 + 0 = 1 + 0 at this
     linarith
-
-  le_antisymm := by
-    intro x y
-    refine Quotient.inductionOn₂ x y ?_
-    intro ⟨a, b⟩ ⟨c, d⟩
-    simp[le_quotient_int, le_nat_pair]
-    intro ha hb
-    apply Quotient.eq_iff_equiv.mpr
-    change a + d = b + c
-    linarith
-
-  le_total := by
-    intro x y
-    refine Quotient.inductionOn₂ x y ?_
-    intro ⟨a, b⟩ ⟨c, d⟩
-    simp[le_quotient_int, le_nat_pair]
-    exact Nat.le_total (a + d) (c + b)
 
   add_le_add_left := by
     intro x y
@@ -451,6 +504,7 @@ instance : IsInteger QuotientInt where
     intro hxy z
     refine Quotient.inductionOn z ?_
     intro ⟨e, f⟩
+    change le_quotient_int ⟦⟨a, b⟩⟧ ⟦⟨c, d⟩⟧ at hxy
     change le_quotient_int (add_quotient_int ⟦⟨e, f⟩⟧  ⟦⟨a, b⟩⟧) (add_quotient_int ⟦⟨e, f⟩⟧ ⟦⟨c, d⟩⟧)
     simp_all [le_quotient_int, add_quotient_int, le_nat_pair, add_nat_pair]
     linarith
@@ -478,13 +532,118 @@ instance : IsInteger QuotientInt where
     . change mul_quotient_int z y = _
       rw[quotient_int_mul_comm]
 
-  lt_iff_le_not_ge := by
-    intro x y
-    refine Quotient.inductionOn₂ x y ?_
-    intro ⟨a, b⟩ ⟨c, d⟩
-    simp[lt_quotient_int, le_quotient_int, lt_nat_pair, le_nat_pair]
-    intro h
-    exact Nat.le_of_succ_le h
+def QuotientIntEquivInt : QuotientInt ≃+*o ℤ := {
+    toFun := by
+      intro x
+      refine x.lift int_nat_pair ?_
+      intro ⟨a, b⟩ ⟨c, d⟩
+      intro hab
+      simp[int_nat_pair]
+      change a + d = b + c at hab
+      linarith
+
+    invFun := coeZQuotientInt
+    right_inv := by
+      intro x
+      match h : x with
+      | Int.ofNat n | Int.negSucc n =>
+        simp[int_nat_pair, Int.negSucc_eq]
+
+    left_inv := by
+      intro x
+      refine Quotient.inductionOn x ?_
+      intro ⟨a, b⟩
+      simp[int_nat_pair]
+      match h : (↑a - ↑b : ℤ) with
+      | Int.ofNat n =>
+        simp[h]
+        apply Quotient.eq_iff_equiv.mpr
+        change n + b = 0 + a
+        zify
+        simp at h
+        rw[←h]
+        ring
+      | Int.negSucc n =>
+        simp[h]
+        apply Quotient.eq_iff_equiv.mpr
+        change 0 + b = n + 1 + a
+        zify
+        simp[Int.negSucc_eq] at h
+        linarith
+
+    map_mul' := by
+      intro x y
+      refine Quotient.inductionOn₂ x y ?_
+      intro ⟨a, b⟩ ⟨c, d⟩
+      change Quotient.lift int_nat_pair _ (mul_quotient_int ⟦⟨a, b⟩⟧ ⟦⟨c, d⟩⟧) = _
+      simp[int_nat_pair, mul_quotient_int, mul_nat_pair]
+      ring
+
+    map_add' := by
+      intro x y
+      refine Quotient.inductionOn₂ x y ?_
+      intro ⟨a, b⟩ ⟨c, d⟩
+      change Quotient.lift int_nat_pair _ (add_quotient_int ⟦⟨a, b⟩⟧ ⟦⟨c, d⟩⟧) = _
+      simp[int_nat_pair, add_quotient_int, add_nat_pair]
+      ring
+
+    map_le_map_iff' := by
+      intro x y
+      refine Quotient.inductionOn₂ x y ?_
+      intro ⟨a, b⟩ ⟨c, d⟩
+      change _ ↔ le_quotient_int ⟦⟨a, b⟩⟧ ⟦⟨c, d⟩⟧
+      simp[int_nat_pair, le_quotient_int, le_nat_pair]
+      rw[←Int.add_le_add_iff_right (c := d)]
+      ring_nf
+      zify
+}
+
+
+instance : IsInteger QuotientInt where
+  ofNat := quotient_int_ofNat
+  intEquiv := QuotientIntEquivInt
 
   nonneg_well_ordered := by
-    sorry
+    refine {
+      toIsTrichotomous := instIsTrichotomousLt,
+      toIsTrans := instIsTransLt,
+      toIsWellFounded := {
+        wf := WellFounded.intro fun a => ?_
+      }
+    }
+
+    apply (measure fun (z : {z : QuotientInt | z ≥ 0}) ↦ quotient_int_natAbs z.val).wf.induction
+
+    intro ⟨x, hx⟩ hI
+    constructor
+    intro ⟨y, hy⟩
+    convert hI ⟨y, hy⟩ using 1
+    change x ≥ 0 at hx
+    change y ≥ 0 at hy
+
+    change y < x ↔ quotient_int_natAbs y < quotient_int_natAbs x
+    revert hx
+    revert hy
+    refine Quotient.inductionOn₂ x y ?_
+    intro ⟨c, d⟩ ⟨a, b⟩
+    intro hx hy _
+    clear * - hx hy
+
+    change le_quotient_int ⟦⟨0, 0⟩⟧ ⟦⟨a, b⟩⟧ at hx
+    change le_quotient_int ⟦⟨0, 0⟩⟧ ⟦⟨c, d⟩⟧ at hy
+    change lt_quotient_int ⟦⟨a, b⟩⟧ ⟦⟨c, d⟩⟧ ↔ _
+
+    simp_all[quotient_int_natAbs, abs_nat_pair, le_quotient_int, le_nat_pair, lt_quotient_int, lt_nat_pair]
+    constructor
+    . intro hmp
+      rw[←Nat.add_lt_add_iff_right (n := a - b) (m := c - d) (k := b + d)]
+      ac_change a - b + b + d < c - d + d + b
+      simp[hx, hy]
+      exact hmp
+    . intro hmpr
+      rw[←Nat.add_lt_add_iff_right (n := a - b) (m := c - d) (k := b + d)] at hmpr
+      convert hmpr using 1
+      . ac_change _ = a - b + b + d
+        simp[hx]
+      . ac_change _ = c - d + d + b
+        simp[hy]
