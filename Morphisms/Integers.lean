@@ -4,18 +4,29 @@ import Mathlib.Algebra.Order.Ring.Defs
 import Mathlib.Order.WellFounded
 import Mathlib.Algebra.Ring.Hom.Defs
 import Mathlib.Topology.UniformSpace.Cauchy
+import Lean
 
 import Mathlib
 
 class IsInteger (Z : Type*) extends CommRing Z, LinearOrder Z, IsStrictOrderedRing Z where
   ofNat : ℕ → Z
   intEquiv : Z ≃+*o ℤ
+  toInt : Z → ℤ := intEquiv.toFun
+  ofInt : ℤ → Z := intEquiv.invFun
   nonneg_well_ordered : IsWellOrder {z : Z | z ≥ 0} (· < ·)
 
-instance IsIntOfNat (Z : Type*) [is_int : IsInteger Z] (n : ℕ) : OfNat Z n := ⟨is_int.ofNat n⟩
+attribute [coe] IsInteger.ofNat
+attribute [coe] IsInteger.ofInt
+attribute [coe] IsInteger.toInt
+
+instance IsIntNatCast (Z : Type*) [is_int : IsInteger Z] : NatCast Z := ⟨is_int.ofNat⟩
+instance IsIntIntCast (Z : Type*) [is_int : IsInteger Z] : IntCast Z := ⟨is_int.intEquiv.invFun⟩
+
+instance (Z : Type*) [is_int : IsInteger Z] : CoeHead Z Int where coe where
+  coe := is_int.toInt
+
 
 class IsReal (R : Type) extends Field R, ConditionallyCompleteLinearOrder R, IsStrictOrderedRing R
-
 
 instance : IsInteger Int where
   ofNat := Int.ofNat
@@ -219,6 +230,65 @@ def quotient_int_right_distrib (x y z : QuotientInt) :
 
 def quotient_int_ofNat (n : ℕ) : QuotientInt := ⟦⟨n, 0⟩⟧
 
+def nat_pair_toNat (x : NatPair) : ℕ :=
+  if x.p ≥ x.q then
+    x.p - x.q
+  else
+    0
+
+lemma ge_def {a b : ℕ} : a ≤ b ↔ ∃ k : ℕ, a + k = b := by
+  constructor
+  . intro hmp
+    use b - a
+    exact Nat.add_sub_of_le hmp
+  . intro ⟨k, hk⟩
+    exact Nat.le.intro hk
+
+lemma gt_def {a b : ℕ} :  a < b ↔ ∃ k : ℕ, a + k = b ∧ k > 0 := by
+  constructor
+  . intro hmp
+    use b - a
+    constructor
+    . refine Nat.add_sub_of_le ?_
+      exact Nat.le_of_succ_le hmp
+    . exact Nat.zero_lt_sub_of_lt hmp
+  . intro ⟨k, ⟨hk, hk_nonzero⟩⟩
+    subst hk
+    simp_all only [gt_iff_lt, lt_add_iff_pos_right]
+
+
+
+def quotient_int_toNat (x : QuotientInt) : ℕ := by
+  refine x.lift nat_pair_toNat ?_
+  intro ⟨a, b⟩ ⟨c, d⟩ hab
+  simp_all[nat_pair_toNat, HasEquiv.Equiv, PreIntSetoid]
+  by_cases h : b ≤ a
+  . simp[h]
+    have ⟨k, hk⟩ : ∃ k, b + k = a := ge_def.mp h
+
+    have : b + k + d = b + c := by convert hab
+    rw[add_assoc, Nat.add_left_cancel_iff (n := b), add_comm] at this
+    have : d ≤ c := by
+      apply ge_def.mpr
+      use k
+
+    clear * - h this hab
+    simp[this]
+    rw[←Nat.add_right_cancel_iff (n := b + d)]
+    ac_change a - b + b + d = c - d + d + b
+    simp[Nat.sub_add_cancel, h, this, add_comm c b]
+    exact hab
+  . simp[h]; simp at h
+    intro hcd
+    have ⟨k, hk⟩ : ∃ k : ℕ, d + k = c := by exact ge_def.mp hcd
+    rw[←hk, add_comm d k, ←add_assoc b k d] at hab
+    rw[Nat.add_right_cancel_iff (n := d)] at hab
+    have : k = 0 := by linarith
+    simp[this] at hk
+    subst hk
+    simp only [tsub_self]
+
+
 lemma lt_and_le_iff_lt (a b : ℕ) : a ≤ b ∧ a < b ↔ a < b := by
   constructor
   . intro h
@@ -227,13 +297,6 @@ lemma lt_and_le_iff_lt (a b : ℕ) : a ≤ b ∧ a < b ↔ a < b := by
     constructor
     . exact Nat.le_of_succ_le hmpr
     . exact hmpr
-
-lemma gt_def {a b : ℕ} (h : a < b) : ∃ k : ℕ, a + k = b ∧ k > 0 := by
-  use b - a
-  constructor
-  . refine Nat.add_sub_of_le ?_
-    exact Nat.le_of_succ_le h
-  . exact Nat.zero_lt_sub_of_lt h
 
 def abs_nat_pair (x : NatPair) : ℕ :=
   if x.p ≥ x.q then
@@ -285,7 +348,7 @@ theorem quotient_int_mul_lt_of_pos_right (x y z : QuotientInt) :
         intro ⟨a, b⟩ ⟨c, d⟩ ⟨e, f⟩
         simp_all [lt_quotient_int, lt_nat_pair, Quotient.lift_mk,  Quotient.map₂_mk, mul_quotient_int, mul_nat_pair]
         intro hxy hz
-        have ⟨k, ⟨hk_eq, hk_pos⟩⟩  : ∃ k : ℕ, f + k = e ∧ k > 0 := by exact gt_def hz
+        have ⟨k, ⟨hk_eq, hk_pos⟩⟩  : ∃ k : ℕ, f + k = e ∧ k > 0 := by exact gt_def.mp hz
 
         ac_change (a * e + d * e) + (c * f + b * f) < (c * e + b * e) + (a * f + d * f)
         simp[←right_distrib]
@@ -296,13 +359,9 @@ theorem quotient_int_mul_lt_of_pos_right (x y z : QuotientInt) :
         exact Nat.mul_lt_mul_of_pos_right hxy hk_pos
 
 @[simp]
-def coeZQuotientInt : ℤ → QuotientInt
+def quotient_int_fromInt : ℤ → QuotientInt
     | Int.ofNat n => ⟦⟨n, 0⟩⟧
     | Int.negSucc n => ⟦⟨0, n + 1⟩⟧
-
-instance : Coe ℤ QuotientInt where
-  coe := coeZQuotientInt
-
 
 instance : LinearOrder QuotientInt where
   le := le_quotient_int
@@ -313,15 +372,12 @@ instance : LinearOrder QuotientInt where
       if h : a.p + b.q ≤ b.p + a.q then
         isTrue (by
           change le_quotient_int ⟦a⟧ ⟦b⟧
-          simp[le_quotient_int, le_nat_pair]
-          exact h
+          simp_all[le_quotient_int, le_nat_pair]
         )
       else
         isFalse (by
           change ¬le_quotient_int ⟦a⟧ ⟦b⟧
-          simp[le_quotient_int, le_nat_pair]
-          simp at h
-          exact h
+          simp_all[le_quotient_int, le_nat_pair]
         )
 
   le_refl := by
@@ -402,7 +458,7 @@ instance : CommRing QuotientInt where
     congr
     <;> simp[right_distrib]
 
-  zsmul := fun z x ↦ mul_quotient_int z x
+  zsmul := fun z x ↦ mul_quotient_int (quotient_int_fromInt z) x
   zsmul_zero' := by
     intro x
     simp
@@ -542,7 +598,7 @@ def QuotientIntEquivInt : QuotientInt ≃+*o ℤ := {
       change a + d = b + c at hab
       linarith
 
-    invFun := coeZQuotientInt
+    invFun := quotient_int_fromInt
     right_inv := by
       intro x
       match h : x with
@@ -647,3 +703,17 @@ instance : IsInteger QuotientInt where
         simp[hx]
       . ac_change _ = c - d + d + b
         simp[hy]
+
+
+instance : Lean.ToExpr QuotientInt where
+  toTypeExpr := .const ``QuotientInt []
+  toExpr i := if 0 ≤ i then
+    mkNat (quotient_int_toNat i)
+  else
+    Lean.mkApp3 (.const ``Neg.neg [0]) (.const ``Int []) (.const ``Int.instNegInt [])
+      (mkNat (quotient_int_toNat (-i)))
+where
+  mkNat (n : Nat) : Lean.Expr :=
+    let r := Lean.mkRawNatLit n
+    Lean.mkApp3 (.const ``OfNat.ofNat [0]) (.const ``Int []) r
+        (.app (.const ``instOfNat []) r)
