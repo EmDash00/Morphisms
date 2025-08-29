@@ -3,92 +3,63 @@ import Mathlib
 
 open Lean Elab Tactic
 
-@[ext]
-structure IntLike where
-  val : ℤ
+def digitsWithFuel (base num fuel : Nat) : List Nat :=
+  match num, fuel with
+  | 0, _ => []
+  | _, 0 => []
+  | m + 1, n => n % base :: digitsWithFuel base m (n / base)
 
-instance : Add IntLike where
-  add a b := ⟨a.val + b.val⟩
 
-instance : Mul IntLike where
-  mul a b := ⟨a.val * b.val⟩
+def digits (base n : Nat) : List Nat := (digitsWithFuel base n n).reverse
 
-instance : Zero IntLike where
-  zero := ⟨0⟩
+def hammingWeight (n : Nat) : Nat := (digits 2 n).sum
 
-instance : One IntLike where
-  one := ⟨1⟩
+def fromDigits (base : Nat) (digits : List Nat) : Nat :=
+  digits.foldl (λ acc digit => acc * base + digit) 0
 
-instance a : IsInteger IntLike where
-  add_assoc := by
-    intros
-    simp only[HAdd.hAdd, Add.add]; simp only [Int.add_def, IntLike.mk.injEq]
-    exact add_assoc _ _ _
-  add_comm := by
-    intros
-    simp only[HAdd.hAdd, Add.add]; simp only [Int.add_def, IntLike.mk.injEq]
-    exact add_comm _ _
-  zero_add := by
-    intro a
-    simp only[HAdd.hAdd, Add.add]; ext; simp; rfl
-  add_zero := by
-    intro a
-    simp only[HAdd.hAdd, Add.add]; ext; simp; rfl
 
-  nsmul := fun a b ↦ IntLike.mk a * b
-  zsmul := fun a b ↦ IntLike.mk a * b
-  neg := fun a ↦ ⟨-a.val⟩
+def concat (x y : ℕ) : Nat :=
+  fromDigits 10 ((digits 10 x) ++ (digits 10 y))
 
-  neg_add_cancel := by
-    intro
-    simp only[HAdd.hAdd, Add.add]; ext; simp; rfl
+def signedConcat : (x y : ℤ) → ℤ
+| Int.ofNat a, Int.ofNat b => Int.ofNat (fromDigits 10 ((digits 10 a) ++ (digits 10 b)))
+| Int.negSucc a, Int.negSucc b => Int.ofNat (fromDigits 10 ((digits 10 (Nat.succ a)) ++ (digits 10 (Nat.succ b))))
+| Int.negSucc a, Int.ofNat b => -Int.ofNat (fromDigits 10 ((digits 10 (Nat.succ a)) ++ (digits 10 (b))))
+| Int.ofNat a, Int.negSucc b => -Int.ofNat (fromDigits 10 ((digits 10 (a)) ++ (digits 10 (Nat.succ b))))
 
-  mul_assoc := by
-    intros
-    simp only[HMul.hMul, Mul.mul]; simp only [Int.mul_def, IntLike.mk.injEq]
-    exact mul_assoc _ _ _
-  mul_comm := by
-    intros
-    simp only[HMul.hMul, Mul.mul]; simp only [Int.mul_def, IntLike.mk.injEq]
-    exact mul_comm _ _
-  zero_mul := by
-    intro a
-    simp only[HMul.hMul, Mul.mul]; ext; simp;
-    change 0 * a.val = 0
-    simp only[zero_mul]
-  mul_zero := by
-    intro a
-    simp only[HMul.hMul, Mul.mul]; ext; simp;
-    change a.val * 0 = 0
-    simp only[mul_zero]
-  one_mul := by
-    intro a
-    simp only[HMul.hMul, Mul.mul]; ext; simp;
-    change 1 * a.val = a.val
-    simp only[one_mul]
-  mul_one:= by
-    intro a
-    simp only[HMul.hMul, Mul.mul]; ext; simp;
-    change a.val * 1 = a.val
-    simp only[mul_one]
-  left_distrib := by
-    intros
-    simp only[HMul.hMul, Mul.mul, HAdd.hAdd, Add.add]; ext; simp;
-    exact left_distrib _ _ _
-  right_distrib := by
-    intros
-    simp only[HMul.hMul, Mul.mul, HAdd.hAdd, Add.add]; ext; simp;
-    exact right_distrib _ _ _
+def lastDigitWord (x : IntLike) : String :=
+  match (digits 10 (x.val.natAbs)).getLast? with
+  | some digit => match digit with
+     | 0 => "zero" -- zero
+     | 1 => "one" -- one
+     | 2 => "two" -- two
+     | 3 => "three" -- three
+     | 4 => "four" -- four
+     | 5 => "five" -- five
+     | 6 => "six" -- six
+     | 7 => "seven" -- seven
+     | 8 => "eight" -- eight
+     | 9 => "nine" -- nine
+     | _ => "zero"
+  | none => "zero"
 
-  le := fun a b ↦ a.val ≤ b.val
-  le_refl := by simp only [le_refl, implies_true]
-  le_trans := by  intro _ _ _; exact Int.le_trans
-  le_antisymm := by intro _ _ ha hb; ext; exact Int.le_antisymm ha hb
-  le_total := by intro a b; exact Int.le_total a.val b.val
-  toDecidableLE := fun a b ↦ if h : a.val ≤ b.val then isTrue (h) else isFalse (h)
+
+def isEven (x : ℤ) : Prop := x % 2 = 0
+
+theorem countDigits_add_of_lastDigitsOne (x y : IntLike)
+   (hx : lastDigitWord x = "one") (hy : lastDigitWord y = "one") : lastDigitWord (x + y) = "two" := by
+     simp_all [lastDigitWord]
+
+     have : (digits 10 x.val.natAbs).getLast? = some 1 := by
+       by_contra h
+       have : lastDigitWord x ≠ "one" := by
+        simp[lastDigitWord, h]
 
 
 
+#eval lastDigitWordCount (34 : IntLike)
+--theorem concatEven (x y : ℤ) (hy : isEven x) : isEven (signedConcat x y) := by
+  --unfold signedConcat fromDigits
 
 
 

@@ -704,6 +704,163 @@ instance : IsInteger QuotientInt where
       . ac_change _ = c - d + d + b
         simp[hy]
 
+@[ext]
+structure IntLike where
+  val : ℤ
+
+instance : Add IntLike where
+  add a b := ⟨a.val + b.val⟩
+
+instance : Mul IntLike where
+  mul a b := ⟨a.val * b.val⟩
+
+instance instZero : Zero IntLike where
+  zero := ⟨0⟩
+
+instance : One IntLike where
+  one := ⟨1⟩
+
+instance : CommRing IntLike where
+  add_assoc := by
+    intros
+    simp only[HAdd.hAdd, Add.add]; simp only [Int.add_def, IntLike.mk.injEq]
+    exact add_assoc _ _ _
+  add_comm := by
+    intros
+    simp only[HAdd.hAdd, Add.add]; simp only [Int.add_def, IntLike.mk.injEq]
+    exact add_comm _ _
+  zero_add := by
+    intro a
+    simp only[HAdd.hAdd, Add.add]; ext; simp; rfl
+  add_zero := by
+    intro a
+    simp only[HAdd.hAdd, Add.add]; ext; simp; rfl
+
+  nsmul := fun a b ↦ IntLike.mk (Int.ofNat a) * b
+  nsmul_zero := by
+    intro ⟨x⟩;
+    change _ = IntLike.mk 0
+    simp only[HMul.hMul, Mul.mul]; simp only [Int.mul_def, IntLike.mk.injEq]
+    exact Int.zero_mul x
+  nsmul_succ := by
+    intro n ⟨x⟩
+    simp only[HAdd.hAdd, Add.add, HMul.hMul, Mul.mul]; ext; simp
+    exact add_one_mul (↑n) x
+
+
+  zsmul := fun a b ↦ IntLike.mk a * b
+  zsmul_zero' := by intro ⟨a⟩; change _ = IntLike.mk 0; ext; exact Int.zero_mul a
+  zsmul_succ' := by intro n ⟨a⟩; simp only[HAdd.hAdd, Add.add, HMul.hMul, Mul.mul]; ext; simp; exact add_one_mul (↑n) a
+  zsmul_neg' := by intro n ⟨a⟩; simp only[HMul.hMul, Mul.mul]; ext; simp[Int.negSucc_eq]; ring
+
+  neg := fun a ↦ ⟨-a.val⟩
+
+  neg_add_cancel := by
+    intro
+    simp only[HAdd.hAdd, Add.add]; ext; simp; rfl
+
+  mul_assoc := by
+    intros
+    simp only[HMul.hMul, Mul.mul]; simp only [Int.mul_def, IntLike.mk.injEq]
+    exact mul_assoc _ _ _
+  mul_comm := by
+    intros
+    simp only[HMul.hMul, Mul.mul]; simp only [Int.mul_def, IntLike.mk.injEq]
+    exact mul_comm _ _
+  zero_mul := by
+    intro a
+    simp only[HMul.hMul, Mul.mul]; ext; simp;
+    change 0 * a.val = 0
+    simp only[zero_mul]
+  mul_zero := by
+    intro a
+    simp only[HMul.hMul, Mul.mul]; ext; simp;
+    change a.val * 0 = 0
+    simp only[mul_zero]
+  one_mul := by
+    intro a
+    simp only[HMul.hMul, Mul.mul]; ext; simp;
+    change 1 * a.val = a.val
+    simp only[one_mul]
+  mul_one:= by
+    intro a
+    simp only[HMul.hMul, Mul.mul]; ext; simp;
+    change a.val * 1 = a.val
+    simp only[mul_one]
+  left_distrib := by
+    intros
+    simp only[HMul.hMul, Mul.mul, HAdd.hAdd, Add.add]; ext; simp;
+    exact left_distrib _ _ _
+  right_distrib := by
+    intros
+    simp only[HMul.hMul, Mul.mul, HAdd.hAdd, Add.add]; ext; simp;
+    exact right_distrib _ _ _
+
+instance : LinearOrder IntLike where
+  le := fun a b ↦ a.val ≤ b.val
+  lt := fun a b ↦ a.val < b.val
+  le_refl := by simp only [le_refl, implies_true]
+  le_trans := by  intro _ _ _; exact Int.le_trans
+  le_antisymm := by intro _ _ ha hb; ext; exact Int.le_antisymm ha hb
+  le_total := by intro a b; exact Int.le_total a.val b.val
+  lt_iff_le_not_ge := by intro ⟨a⟩ ⟨b⟩; exact Int.lt_iff_le_not_le
+  toDecidableLE := fun a b ↦ if h : a.val ≤ b.val then isTrue (h) else isFalse (h)
+
+instance : IsStrictOrderedRing IntLike where
+  exists_pair_ne := by use IntLike.mk 0; use IntLike.mk 1; simp[IntLike.mk.injEq]
+  zero_le_one := by change  IntLike.mk 0 ≤ IntLike.mk 1; change 0 ≤ 1; exact posPart_eq_self.mp rfl
+  add_le_add_left := by intro ⟨a⟩ ⟨b⟩ h ⟨c⟩; exact Int.add_le_add_left h c
+  add_le_add_right := by intro ⟨a⟩ ⟨b⟩ h ⟨c⟩; exact Int.add_le_add_right h c
+  le_of_add_le_add_left := by intro _ _ _; exact Int.le_of_add_le_add_left
+  le_of_add_le_add_right := by intro _ _ _; exact Int.le_of_add_le_add_right
+  mul_lt_mul_of_pos_right := by intro ⟨a⟩ ⟨b⟩ ⟨c⟩ hab hc; exact Int.mul_lt_mul_of_pos_right hab hc
+  mul_lt_mul_of_pos_left := by intro ⟨a⟩ ⟨b⟩ ⟨c⟩ hab hc; exact Int.mul_lt_mul_of_pos_left hab hc
+
+instance : IsInteger IntLike where
+  ofNat := fun n ↦ ⟨Int.ofNat n⟩
+  intEquiv := {
+    toFun := fun x ↦ x.val
+    invFun := fun z ↦ ⟨z⟩
+    map_add' := by intros; rfl
+    map_mul':= by intros; rfl
+    map_le_map_iff' := by intros; rfl
+  }
+  nonneg_well_ordered := by
+    refine {
+      toIsTrichotomous := instIsTrichotomousLt,
+      toIsTrans := instIsTransLt,
+      toIsWellFounded := {
+        wf := WellFounded.intro fun a => ?_
+      }
+    }
+
+    apply (measure fun (z : {z : IntLike | z ≥ 0}) ↦ z.val.val.natAbs).wf.induction
+
+    intro ⟨⟨x⟩, hx⟩ hI
+    constructor
+    intro ⟨⟨y⟩, hy⟩
+    convert hI ⟨⟨y⟩, hy⟩ using 1
+
+    change x ≥ 0 at hx
+    change y ≥ 0 at hy
+    change y < x ↔ y.natAbs < x.natAbs
+    zify
+    simp only[abs_of_nonneg, hx, hy]
+
+
+instance : Lean.ToExpr IntLike where
+  toTypeExpr := .const ``IntLike []
+  toExpr i := if 0 ≤ i then
+    mkNat (i.val.toNat)
+  else
+    Lean.mkApp3 (.const ``Neg.neg [0]) (.const ``Int []) (.const ``Int.instNegInt [])
+      (mkNat ((-i).val.toNat))
+where
+  mkNat (n : Nat) : Lean.Expr :=
+    let r := Lean.mkRawNatLit n
+    Lean.mkApp3 (.const ``OfNat.ofNat [0]) (.const ``Int []) r
+        (.app (.const ``instOfNat []) r)
+
 
 instance : Lean.ToExpr QuotientInt where
   toTypeExpr := .const ``QuotientInt []
