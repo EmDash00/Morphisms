@@ -1,39 +1,33 @@
 import Morphisms.Integers
+import Morphisms.Palindrome
 import Mathlib
-
+import Mathlib.Algebra.Order.Hom.Ring
 open Lean Elab Tactic
 
-def digit (base n : Nat) (k : Nat) : ℕ := (n / base^k) % base
+/-
+The following are useful lemmas for simplifying casts.
+-/
+@[simp]
+lemma ofInt_intCast (Z : Type*) [is_int : IsInteger Z] (z : Z) : ((z : ℤ) : Z) = z := by
+    change EquivLike.inv is_int.intEquiv (is_int.intEquiv z) = z
+    rw[EquivLike.inv_apply_eq (e := IsInteger.intEquiv) (b := IsInteger.intEquiv z) (a := z)]
 
-def binDigit (n k : Nat) : ℕ := digit 2 n k
+@[simp]
+lemma intCast_ofInt (Z : Type*) [is_int : IsInteger Z] (z : ℤ) : ((z : Z) : ℤ) = z := by
+    change is_int.intEquiv (EquivLike.inv is_int.intEquiv z) = z
+    symm
+    rw[←EquivLike.inv_apply_eq (e := IsInteger.intEquiv) (b := z) (a := EquivLike.inv IsInteger.intEquiv z)]
 
-def lsb (n : Nat) : ℕ := digit 2 n 0
+@[simp]
+lemma intCastInt (z : ℤ) : toInt z = z := by rfl
 
-def numeric_map (x : ℕ) : String := by
-  mod_cases h : x % 10
-  . exact ""
-  . exact "I"
-  . exact "oo"
-  . exact "ana"
-  . exact "swap"
-  . exact "straw"
-  . exact "redder"
-  . exact "rotator"
-  . exact "starrats"
-  . exact "birchcrab"
+instance (α β : Type*) [IsInteger α] [IsInteger β] : CanLift β α (fun a ↦ (a : β)) (fun _ ↦ True) where
+  prf := by
+    intro b
+    simp only [forall_const]
+    use (b : α)
+    simp only [intCast_ofInt, ofInt_intCast]
 
-
-
-theorem lsb_add_zero_one (x y : ℕ) (hx : lsb x = 0) (hy : lsb y = 1) : lsb (x + y) = 1 := by
-  revert hx hy
-  unfold lsb digit
-  simp
-  intro hx hy
-
-
-
-
--- Metaprogram to lift all ZMod 2 variables to Bool
 def recast_tac (src tgt : Syntax) : TacticM Unit := do
   let srcExpr ← elabTerm src none
   let tgtTerm : TSyntax `term := ⟨tgt⟩
@@ -50,5 +44,13 @@ def recast_tac (src tgt : Syntax) : TacticM Unit := do
         evalTactic (← `(tactic| lift $(mkIdent decl.userName) to $tgtTerm using (by trivial)))
     | none => continue
 
-  evalTactic (← `(tactic| simp only[BooleanEquiv.map_and, BooleanEquiv.map_or, booleanEquivInv]))
+  -- The final version of this tactic should use metaprogramming to see which simplifications can be used.
+  evalTactic (← `(tactic| simp only[map_mul, map_add, OrderRingIso.map_le_map_iff', ofInt_intCast, ofInt_intCast, intCast_ofInt, intCastInt]))
 
+
+elab "recast" src:term "as" tgt:term : tactic => do
+  recast_tac src tgt
+
+example (z : QuotientInt) : isPalindrome (String.mk ((palindrome_map_int z).data ++ (palindrome_map_int (-z)).data)) := by
+  recast QuotientInt as ℤ
+  exact neg_concat_isPalindrome z

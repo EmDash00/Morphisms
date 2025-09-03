@@ -11,19 +11,18 @@ import Mathlib
 class IsInteger (Z : Type*) extends CommRing Z, LinearOrder Z, IsStrictOrderedRing Z where
   ofNat : ℕ → Z
   intEquiv : Z ≃+*o ℤ
-  toInt : Z → ℤ := intEquiv.toFun
-  ofInt : ℤ → Z := intEquiv.invFun
   nonneg_well_ordered : IsWellOrder {z : Z | z ≥ 0} (· < ·)
 
+@[coe] def toInt {Z : Type*} [is_int : IsInteger Z] (z : Z) : ℤ := is_int.intEquiv z
+@[coe] def ofInt {Z : Type*} [is_int : IsInteger Z] (z : ℤ) : Z := is_int.intEquiv.symm z
+
 attribute [coe] IsInteger.ofNat
-attribute [coe] IsInteger.ofInt
-attribute [coe] IsInteger.toInt
 
 instance IsIntNatCast (Z : Type*) [is_int : IsInteger Z] : NatCast Z := ⟨is_int.ofNat⟩
-instance IsIntIntCast (Z : Type*) [is_int : IsInteger Z] : IntCast Z := ⟨is_int.intEquiv.invFun⟩
+instance IsIntIntCast (Z : Type*) [is_int : IsInteger Z] : IntCast Z := ⟨ofInt⟩
 
-instance (Z : Type*) [is_int : IsInteger Z] : CoeHead Z Int where coe where
-  coe := is_int.toInt
+
+instance (Z : Type*) [is_int : IsInteger Z] : CoeHead Z Int := ⟨toInt⟩
 
 
 class IsReal (R : Type) extends Field R, ConditionallyCompleteLinearOrder R, IsStrictOrderedRing R
