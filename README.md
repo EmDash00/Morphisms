@@ -2,6 +2,23 @@
 
 Author: Ember Chow
 
+## Table of Contents
+
+- [Motivation](#motivation)
+- [Aims](#aims)
+- [Methods](#methods)
+    - [Addressing Aim 1](#addressing-aim-1)
+        - [Boolean Example](#boolean-example)
+        - [A Category Theoretic View](#a-category-theoretic-view)
+        - [Example: Universal Construction of the Reals](#example-universal-construction-of-the-reals)
+    - [Addressing Aim 2](#addressing-aim-2)
+    - [Addressing Aim 3](#addressing-aim-3)
+        - [Part 1: Mutual Coercion](#part-1-mutual-coercion)
+        - [Part 2: Isomorphism](#part-2-isomorphism)
+        - [Part 3: Lifting](#part-3-lifting)
+        - [Part 4: The Recast Tactic](#part-4-the-recast-tactic)
+- [Future Work](#future-work)
+
 ## Motivation
 
 A central problem in Lean4's ecosystem is the lack of decentralization. The current development philosophy for large parts of Lean4's code is to create pull-requests into Mathlib, which is a "library" made to subsume all of mathematics.
