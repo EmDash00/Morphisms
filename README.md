@@ -10,7 +10,7 @@ This leads to "dependency lock-in". Higher level code is forced to use implement
 
 This is completely contrary to the how software development works elsewhere. There are often many implementations that provide the same functionality, and authors can choose from this abundance the library that best suits their design goals.
 
-But this isn't as simple as having two libraries provide, for example, two independent implementations of the integers. What if a theorem Tproved using library A's framework was not available in library B's framework? It is desirable in this case to be able to "transfer" the prove from framework A to framework B as to not duplicate work.
+But this isn't as simple as having two libraries provide, for example, two independent implementations of the integers. What if a theorem proved using library A's framework was not available in library B's framework? It is desirable in this case to be able to "transfer" the prove from framework A to framework B as to not duplicate work.
 
 But going even further on the provided example, how can one even ascertain that:
 
